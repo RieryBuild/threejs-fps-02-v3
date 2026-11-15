@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>HELIODROME — 5v5 Tactical FPS</title>
+<style>
+  :root {
+    --amber: #f2a541;
+    --amber-soft: #ffb45e;
+    --teal: #3f8f9e;
+    --ink: #f5efe0;
+    --muted: #b8a88f;
+    --panel: rgba(14, 11, 18, 0.72);
+    --line: rgba(245, 239, 224, 0.22);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1226; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink); }
+  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  #hud { position: fixed; inset: 0; pointer-events: none; user-select: none; }
+  .hidden { display: none !important; }
+
+  /* --- top bar ----------------------------------------------------------- */
+  #topbar {
+    position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 14px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 7px 18px; backdrop-filter: blur(3px);
+    font-weight: 800; letter-spacing: 0.06em; white-space: nowrap;
+  }
+  #topbar .team { font-size: 17px; }
+  #topbar .team.atk { color: var(--amber); }
+  #topbar .team.def { color: #6fd3e0; }
+  #topbar .score { font-size: 24px; min-width: 28px; text-align: center; }
+  #topbar .mid { display: flex; gap: 12px; align-items: center; font-size: 13px; color: var(--muted); }
+  #topbar #timer { color: var(--ink); font-size: 19px; font-variant-numeric: tabular-nums; }
+  #topbar #phaseLabel { color: var(--amber-soft); }
+  #bombTimer {
+    position: absolute; top: 62px; left: 50%; transform: translateX(-50%);
+    background: rgba(120, 20, 8, 0.8); border: 1px solid #ff7a5a; border-radius: 6px;
+    padding: 4px 14px; font-weight: 800; letter-spacing: 0.08em; font-size: 14px;
+  }
+  #bombTimer.urgent { animation: pulse 0.5s infinite alternate; }
+  @keyframes pulse { from { opacity: 1; } to { opacity: 0.55; } }
+
+  /* --- minimap ----------------------------------------------------------- */
+  #minimapWrap {
+    position: absolute; top: 12px; left: 12px;
+    border: 2px solid var(--line); border-radius: 8px; overflow: hidden;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+  }
+  #minimap { display: block; width: 180px; height: 180px; }
+
+  /* --- kill feed + callouts ---------------------------------------------- */
+  #killfeed { position: absolute; top: 12px; right: 12px; text-align: right; font-size: 13px; }
+  .feedLine {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 5px;
+    padding: 4px 10px; margin-bottom: 5px; display: inline-block;
+    transition: opacity 0.8s;
+  }
+  .feedLine .atk { color: var(--amber); }
+  .feedLine .def { color: #6fd3e0; }
+  .feedLine .w { color: var(--muted); font-weight: 400; margin: 0 4px; }
+  .feedLine.fade { opacity: 0; }
+  #callouts { position: absolute; left: 12px; bottom: 128px; font-size: 14px; max-width: 340px; }
+  .callLine {
+    background: var(--panel); border-left: 3px solid var(--amber);
+    border-radius: 4px; padding: 5px 10px; margin-top: 5px;
+    transition: opacity 0.8s;
+  }
+  .callLine b { color: var(--amber-soft); }
+  .callLine.fade { opacity: 0; }
+
+  /* --- health / ammo ------------------------------------------------------ */
+  #healthWrap { position: absolute; left: 16px; bottom: 16px; width: 260px; }
+  #healthBar {
+    position: relative; height: 26px; background: rgba(14, 11, 18, 0.8);
+    border: 1px solid var(--line); border-radius: 6px; overflow: hidden;
+  }
+  #healthFill { height: 100%; width: 100%; background: linear-gradient(90deg, #e08a2e, #f2a541); transition: width 0.15s; }
+  #healthFill.low { background: linear-gradient(90deg, #b03024, #e0564a); }
+  #healthNum {
+    position: absolute; inset: 0; display: flex; align-items: center; padding-left: 10px;
+    font-weight: 800; font-size: 15px; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  }
+  #moneyLine { margin-top: 6px; font-size: 15px; font-weight: 700; color: var(--amber-soft); }
+  #moneyLine span { color: var(--muted); font-weight: 600; }
+  #ammoWrap { position: absolute; right: 16px; bottom: 16px; text-align: right; }
+  #ammoBig { font-size: 34px; font-weight: 800; line-height: 1; text-shadow: 0 2px 4px rgba(0, 0, 0, 0.7); }
+  #ammoBig #ammoRes { font-size: 17px; color: var(--muted); font-weight: 600; }
+  #ammoMag.empty { color: #e0564a; }
+  #weaponName { font-size: 14px; font-weight: 700; color: var(--amber-soft); margin-top: 2px; }
+  #grenades { font-size: 14px; color: var(--ink); margin-top: 2px; }
+  #location {
+    position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%);
+    font-size: 13px; font-weight: 700; letter-spacing: 0.22em; color: var(--muted);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  }
+
+  /* --- crosshair / hitmarker / damage -------------------------------------- */
+  #crosshair { position: absolute; left: 50%; top: 50%; width: 0; height: 0; --gap: 6px; }
+  #crosshair .ch { position: absolute; background: var(--ink); box-shadow: 0 0 2px rgba(0, 0, 0, 0.9); }
+  #crosshair .t { left: -1px; top: calc(-1 * var(--gap) - 9px); width: 2px; height: 9px; }
+  #crosshair .b { left: -1px; top: var(--gap); width: 2px; height: 9px; }
+  #crosshair .l { left: calc(-1 * var(--gap) - 9px); top: -1px; width: 9px; height: 2px; }
+  #crosshair .r { left: var(--gap); top: -1px; width: 9px; height: 2px; }
+  #crosshair .dot { left: -1.5px; top: -1.5px; width: 3px; height: 3px; border-radius: 50%; }
+  #crosshair.aiming .t { top: calc(-1 * var(--gap) - 6px); height: 6px; }
+  #crosshair.aiming .b { height: 6px; }
+  #crosshair.aiming .l { left: calc(-1 * var(--gap) - 6px); width: 6px; }
+  #crosshair.aiming .r { width: 6px; }
+  #hitmarker {
+    position: absolute; left: 50%; top: 50%; width: 26px; height: 26px;
+    transform: translate(-50%, -50%) rotate(45deg); opacity: 0; pointer-events: none;
+  }
+  #hitmarker::before, #hitmarker::after {
+    content: ""; position: absolute; background: #fff; box-shadow: 0 0 3px rgba(0, 0, 0, 0.9);
+  }
+  #hitmarker::before { left: 12px; top: 0; width: 2px; height: 26px; }
+  #hitmarker::after { left: 0; top: 12px; width: 26px; height: 2px; }
+  #hitmarker.show { opacity: 1; }
+  #hitmarker.kill::before, #hitmarker.kill::after { background: #ff5a3c; }
+  #dmgdir {
+    position: absolute; left: 50%; top: 50%; width: 150px; height: 150px;
+    transform: translate(-50%, -50%); opacity: 0; pointer-events: none;
+    border-radius: 50%;
+    background: conic-gradient(from -28deg, rgba(224, 86, 74, 0.9) 0deg, rgba(224, 86, 74, 0.9) 56deg, transparent 56deg);
+    -webkit-mask: radial-gradient(circle, transparent 58px, #000 60px, #000 74px, transparent 76px);
+    mask: radial-gradient(circle, transparent 58px, #000 60px, #000 74px, transparent 76px);
+  }
+  #dmgdir.show { opacity: 1; }
+
+  /* --- banner / channel / spectate ------------------------------------------ */
+  #banner { position: absolute; left: 50%; top: 26%; transform: translateX(-50%); text-align: center; }
+  #bannerTitle { font-size: 34px; font-weight: 900; letter-spacing: 0.08em; text-shadow: 0 2px 10px rgba(0, 0, 0, 0.85); }
+  #bannerSub { font-size: 16px; color: var(--amber-soft); margin-top: 6px; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9); }
+  #channel { position: absolute; left: 50%; top: 58%; transform: translateX(-50%); width: 280px; text-align: center; }
+  #channelLabel { font-size: 14px; font-weight: 700; margin-bottom: 6px; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9); }
+  #channelBar { height: 8px; background: rgba(14, 11, 18, 0.8); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+  #channelFill { height: 100%; width: 0%; background: var(--amber); }
+  #spectate {
+    position: absolute; left: 50%; bottom: 110px; transform: translateX(-50%);
+    font-size: 14px; font-weight: 700; letter-spacing: 0.08em; color: var(--muted);
+    background: var(--panel); padding: 5px 14px; border-radius: 5px;
+  }
+  #vignette {
+    position: absolute; inset: 0; pointer-events: none; opacity: 0;
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(200, 30, 20, 0.5) 100%);
+  }
+  #vignette.hurt { opacity: 1; }
+  #flash { position: absolute; inset: 0; pointer-events: none; opacity: 0; background: #fff; }
+
+  /* --- buy menu -------------------------------------------------------------- */
+  #buymenu { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(10, 8, 14, 0.55); pointer-events: auto; }
+  .buyPanel { background: rgba(16, 12, 20, 0.95); border: 1px solid var(--line); border-radius: 12px; padding: 20px 24px; width: 620px; max-width: 92vw; }
+  .buyHead { font-size: 20px; font-weight: 900; letter-spacing: 0.08em; }
+  .buyPlan { float: right; font-size: 13px; color: var(--amber-soft); letter-spacing: 0.04em; }
+  .buyMoney { color: var(--muted); font-size: 13px; margin: 6px 0 14px; }
+  .buyGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .buyItem {
+    display: grid; grid-template-columns: 26px 1fr auto; gap: 2px 10px; text-align: left;
+    background: rgba(245, 239, 224, 0.06); border: 1px solid var(--line); border-radius: 8px;
+    color: var(--ink); padding: 9px 12px; cursor: pointer; font-family: inherit;
+  }
+  .buyItem:hover { background: rgba(242, 165, 65, 0.16); border-color: var(--amber); }
+  .buyItem.poor { opacity: 0.45; }
+  .buyKey { font-weight: 900; color: var(--amber); font-size: 15px; grid-row: span 2; }
+  .buyName { font-weight: 700; font-size: 14px; }
+  .buyDesc { font-size: 12px; color: var(--muted); grid-column: 2; }
+  .buyPrice { font-weight: 800; color: var(--amber-soft); grid-row: span 2; align-self: center; }
+
+  /* --- start / end screens ----------------------------------------------------- */
+  #startmenu, #endscreen {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(180deg, rgba(26, 18, 38, 0.82), rgba(20, 12, 22, 0.94));
+    pointer-events: auto;
+  }
+  .startPanel, .endPanel { text-align: center; max-width: 640px; padding: 20px; }
+  .startKicker { color: var(--amber-soft); letter-spacing: 0.3em; font-size: 13px; font-weight: 700; }
+  .startTitle { font-size: 64px; font-weight: 900; letter-spacing: 0.12em; margin: 10px 0; color: var(--amber); text-shadow: 0 4px 24px rgba(242, 165, 65, 0.35); }
+  .startSub { font-size: 16px; line-height: 1.6; color: var(--ink); }
+  .startControls { margin-top: 18px; font-size: 13px; line-height: 1.7; color: var(--muted); }
+  .startBtn {
+    margin-top: 24px; font-size: 18px; font-weight: 900; letter-spacing: 0.1em;
+    color: #1a1226; background: var(--amber); border: none; border-radius: 8px;
+    padding: 13px 42px; cursor: pointer; font-family: inherit;
+  }
+  .startBtn:hover { background: var(--amber-soft); }
+  .startNote { margin-top: 14px; font-size: 12px; color: var(--muted); }
+  .endTitle { font-size: 52px; font-weight: 900; letter-spacing: 0.1em; color: var(--amber); }
+  .endScore { font-size: 24px; font-weight: 800; margin-top: 10px; }
+  .endMvp { font-size: 15px; color: var(--amber-soft); margin-top: 8px; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="hud"></div>
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three/three.module.min.js"
+  }
+}
+</script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
